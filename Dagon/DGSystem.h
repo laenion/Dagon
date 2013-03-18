@@ -21,6 +21,7 @@
 ////////////////////////////////////////////////////////////
 
 #include "DGPlatform.h"
+#include <GL/glx.h>
 
 ////////////////////////////////////////////////////////////
 // Definitions
@@ -41,11 +42,34 @@ class DGLog;
 class DGTimerManager;
 class DGVideoManager;
 
+typedef struct {
+    Display *dpy;
+    int screen;
+    Window win;
+    GLXContext ctx;
+    XSetWindowAttributes attr;
+    bool fs;
+    XF86VidModeModeInfo deskMode;
+    int x, y;
+    unsigned int width, height;
+    unsigned int depth;
+} GLWindow;
+
+extern GLWindow GLWin;
+
+void* _audioThread(void *arg);
+void* _profilerThread(void *arg);
+void* _systemThread(void *arg);
+void* _systemThread(void *arg);
+void* _timerThread(void *arg);
+void* _videoThread(void *arg);
+
 ////////////////////////////////////////////////////////////
 // Interface - Singleton class
 ////////////////////////////////////////////////////////////
 
-class DGSystem {
+class DGSystemSDL {
+protected:
     DGAudioManager* audioManager;
     DGControl* control;
     DGConfig* config;
@@ -58,22 +82,22 @@ class DGSystem {
     bool _isRunning;
     
     // Private constructor/destructor
-    DGSystem();
-    ~DGSystem();
+    DGSystemSDL();
+    ~DGSystemSDL();
     // Stop the compiler generating methods of copy the object
-    DGSystem(DGSystem const& copy);            // Not implemented
-    DGSystem& operator=(DGSystem const& copy); // Not implemented
+    DGSystemSDL(DGSystemSDL const& copy);            // Not implemented
+    DGSystemSDL& operator=(DGSystemSDL const& copy); // Not implemented
     
 public:
-    static DGSystem& getInstance() {
+    static DGSystemSDL& getInstance() {
         // The only instance
         // Guaranteed to be lazy initialized
         // Guaranteed that it will be destroyed correctly
-        static DGSystem instance;
+        static DGSystemSDL instance;
         return instance;
     }
     
-    void browse(const char* url);
+    virtual void browse(const char* url);
     void createThreads();
     void destroyThreads();
     void findPaths(int argc, char* argv[]);
@@ -86,6 +110,25 @@ public:
     void toggleFullScreen();
 	void update();
     time_t wallTime();
+
+private:
+    bool createGLWindow(char* title, int width, int height, int bits, bool fullscreenflag);
+    GLvoid killGLWindow();
+};
+
+class DGSystem : public DGSystemSDL {
+    DGSystem();
+
+public:
+    void browse(const char* url);
+
+    static DGSystem& getInstance() {
+        // The only instance
+        // Guaranteed to be lazy initialized
+        // Guaranteed that it will be destroyed correctly
+        static DGSystem instance;
+        return instance;
+    }
 };
 
 #endif // DG_SYSTEM_H

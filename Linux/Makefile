@@ -25,7 +25,7 @@ MODULES:= DGAudio DGAudioManager DGButton DGCameraManager \
  DGFeedManager DGFont DGFontData DGFontManager DGImage \
  DGInterface DGLog DGNode DGObject DGOverlay DGRenderManager \
  DGRoom DGScene	DGScript DGShaderData DGSplashData DGSpot DGState \
- DGSystemUnix DGTexture DGTextureManager DGTimerManager DGVideo \
+ DGSystem DGSystemUnix DGTexture DGTextureManager DGTimerManager DGVideo \
  DGVideoManager
 
 EXTLIBS:= stb_image
