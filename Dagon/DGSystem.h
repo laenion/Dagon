@@ -57,12 +57,12 @@ typedef struct {
 
 extern GLWindow GLWin;
 
-void* _audioThread(void *arg);
-void* _profilerThread(void *arg);
-void* _systemThread(void *arg);
-void* _systemThread(void *arg);
-void* _timerThread(void *arg);
-void* _videoThread(void *arg);
+int _audioThread(void *arg);
+int _profilerThread(void *arg);
+int _systemThread(void *arg);
+int _systemThread(void *arg);
+int _timerThread(void *arg);
+int _videoThread(void *arg);
 
 ////////////////////////////////////////////////////////////
 // Interface - Singleton class

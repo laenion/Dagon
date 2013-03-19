@@ -18,6 +18,7 @@
 #include <GL/glx.h>
 #include <pthread.h>
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_mutex.h>
 #include <sys/time.h>
 #include <unistd.h>
 
@@ -54,16 +55,16 @@ static int attrListDbl[] = {GLX_RGBA, GLX_DOUBLEBUFFER,
 	GLX_DEPTH_SIZE, 16,
 	None};
 
-pthread_t tAudioThread;
-pthread_t tProfilerThread;
-pthread_t tSystemThread;
-pthread_t tTimerThread;
-pthread_t tVideoThread;
+SDL_Thread* tAudioThread;
+SDL_Thread* tProfilerThread;
+SDL_Thread* tSystemThread;
+SDL_Thread* tTimerThread;
+SDL_Thread* tVideoThread;
 
-static pthread_mutex_t _audioMutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_mutex_t _systemMutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_mutex_t _timerMutex = PTHREAD_MUTEX_INITIALIZER;
-static pthread_mutex_t _videoMutex = PTHREAD_MUTEX_INITIALIZER;
+static SDL_mutex* _audioMutex = SDL_CreateMutex();
+static SDL_mutex* _systemMutex = SDL_CreateMutex();
+static SDL_mutex* _timerMutex = SDL_CreateMutex();
+static SDL_mutex* _videoMutex = SDL_CreateMutex();
 
 ////////////////////////////////////////////////////////////
 // Implementation - Constructor
@@ -102,32 +103,29 @@ void DGSystemSDL::browse(const char* url)
 
 void DGSystemSDL::createThreads()
 {
-	pthread_create(&tAudioThread, NULL, &_audioThread, NULL);
-	pthread_create(&tTimerThread, NULL, &_timerThread, NULL);
-	pthread_create(&tVideoThread, NULL, &_videoThread, NULL);
+	tAudioThread = SDL_CreateThread(_audioThread, "AudioThread", (void *)NULL);
+	tTimerThread = SDL_CreateThread(_timerThread, "TimerThread", (void *)NULL);
+	tVideoThread = SDL_CreateThread(_videoThread, "VideoThread", (void *)NULL);
 
 	if (config->debugMode)
-		pthread_create(&tProfilerThread, NULL, &_profilerThread, NULL);
+		tProfilerThread = SDL_CreateThread(_profilerThread, "ProfilerThread", (void *)NULL);
 
 	_areThreadsActive = true;
 }
 
 void DGSystemSDL::destroyThreads()
 {
-	pthread_mutex_lock(&_audioMutex);
+	SDL_mutexP(_audioMutex);
 	DGAudioManager::getInstance().terminate();
-	pthread_mutex_unlock(&_audioMutex);
-	pthread_join(tAudioThread, NULL);
+	SDL_mutexV(_audioMutex);
 
-	pthread_mutex_lock(&_timerMutex);
+	SDL_mutexP(_timerMutex);
 	DGTimerManager::getInstance().terminate();
-	pthread_mutex_unlock(&_timerMutex);
-	pthread_join(tTimerThread, NULL);
+	SDL_mutexV(_timerMutex);
 
-	pthread_mutex_lock(&_videoMutex);
+	SDL_mutexP(_videoMutex);
 	DGVideoManager::getInstance().terminate();
-	pthread_mutex_unlock(&_videoMutex);
-	pthread_join(tVideoThread, NULL);
+	SDL_mutexV(_videoMutex);
 
 	_areThreadsActive = false;
 }
@@ -168,13 +166,13 @@ void DGSystemSDL::resumeThread(int threadID)
 	if (_areThreadsActive) {
 		switch (threadID) {
 		case DGAudioThread:
-			pthread_mutex_unlock(&_audioMutex);
+			SDL_mutexV(_audioMutex);
 			break;
 		case DGTimerThread:
-			pthread_mutex_unlock(&_timerMutex);
+			SDL_mutexV(_timerMutex);
 			break;
 		case DGVideoThread:
-			pthread_mutex_unlock(&_videoMutex);
+			SDL_mutexV(_videoMutex);
 			break;
 		}
 	}
@@ -191,8 +189,8 @@ void DGSystemSDL::run()
 	XEvent event;
 	KeySym key;
 
-	int err = pthread_create(&tSystemThread, NULL, &_systemThread, NULL);
-	if (err != 0)
+	tSystemThread = SDL_CreateThread(_systemThread, "SystemThread", (void *)NULL);
+	if (tSystemThread == NULL)
 		printf("\nCan't create system thread");
 
 	_isRunning = true;
@@ -212,47 +210,47 @@ void DGSystemSDL::run()
 					(event.xconfigure.height != GLWin.height)) {
 					GLWin.width = event.xconfigure.width;
 					GLWin.height = event.xconfigure.height;
-					pthread_mutex_lock(&_systemMutex);
+					SDL_mutexP(_systemMutex);
 					glXMakeCurrent(GLWin.dpy, GLWin.win, GLWin.ctx);
 					control->reshape(GLWin.width, GLWin.height);
 					glXMakeCurrent(GLWin.dpy, None, NULL);
-					pthread_mutex_unlock(&_systemMutex);
+					SDL_mutexV(_systemMutex);
 				}
 				break;
 			case MotionNotify:
-				pthread_mutex_lock(&_systemMutex);
+				SDL_mutexP(_systemMutex);
 				glXMakeCurrent(GLWin.dpy, GLWin.win, GLWin.ctx);
 				if (isDragging)
 					control->processMouse(event.xbutton.x, event.xbutton.y, DGMouseEventDrag);
 				else
 					control->processMouse(event.xbutton.x, event.xbutton.y, DGMouseEventMove);
 				glXMakeCurrent(GLWin.dpy, None, NULL);
-				pthread_mutex_unlock(&_systemMutex);
+				SDL_mutexV(_systemMutex);
 				break;
 			case ButtonPress:
-				pthread_mutex_lock(&_systemMutex);
+				SDL_mutexP(_systemMutex);
 				glXMakeCurrent(GLWin.dpy, GLWin.win, GLWin.ctx);
 				if (event.xbutton.button == 1)
 					control->processMouse(event.xbutton.x, event.xbutton.y, DGMouseEventDown);
 				else if (event.xbutton.button == 3)
 					control->processMouse(event.xbutton.x, event.xbutton.y, DGMouseEventRightDown);
 				glXMakeCurrent(GLWin.dpy, None, NULL);
-				pthread_mutex_unlock(&_systemMutex);
+				SDL_mutexV(_systemMutex);
 				isDragging = true;
 				break;
 			case ButtonRelease:
-				pthread_mutex_lock(&_systemMutex);
+				SDL_mutexP(_systemMutex);
 				glXMakeCurrent(GLWin.dpy, GLWin.win, GLWin.ctx);
 				if (event.xbutton.button == 1)
 					control->processMouse(event.xbutton.x, event.xbutton.y, DGMouseEventUp);
 				else if (event.xbutton.button == 3)
 					control->processMouse(event.xbutton.x, event.xbutton.y, DGMouseEventRightUp);
 				glXMakeCurrent(GLWin.dpy, None, NULL);
-				pthread_mutex_unlock(&_systemMutex);
+				SDL_mutexV(_systemMutex);
 				isDragging = false;
 				break;
 			case KeyPress:
-				pthread_mutex_lock(&_systemMutex);
+				SDL_mutexP(_systemMutex);
 				glXMakeCurrent(GLWin.dpy, GLWin.win, GLWin.ctx);
 				if (XLookupString(&event.xkey, buffer, 80, &key, 0)) {
 					if (isModified) {
@@ -284,24 +282,24 @@ void DGSystemSDL::run()
 					}
 				}
 				glXMakeCurrent(GLWin.dpy, None, NULL);
-				pthread_mutex_unlock(&_systemMutex);
+				SDL_mutexV(_systemMutex);
 				break;
 
 			case KeyRelease:
 				key = XLookupKeysym(&event.xkey, 0);
-				pthread_mutex_lock(&_systemMutex);
+				SDL_mutexP(_systemMutex);
 				glXMakeCurrent(GLWin.dpy, GLWin.win, GLWin.ctx);
 				control->processKey(key, DGKeyEventUp);
 				glXMakeCurrent(GLWin.dpy, None, NULL);
-				pthread_mutex_unlock(&_systemMutex);
+				SDL_mutexV(_systemMutex);
 				break;
 			case ClientMessage:
 				// Simulate ESC key
-				pthread_mutex_lock(&_systemMutex);
+				SDL_mutexP(_systemMutex);
 				glXMakeCurrent(GLWin.dpy, GLWin.win, GLWin.ctx);
 				control->processKey(DGKeyEsc, DGKeyEventDown);
 				glXMakeCurrent(GLWin.dpy, None, NULL);
-				pthread_mutex_unlock(&_systemMutex);
+				SDL_mutexV(_systemMutex);
 				break;
 			default:
 				break;
@@ -311,13 +309,11 @@ void DGSystemSDL::run()
 
 
 	if (config->debugMode) {
-		pthread_mutex_lock(&_systemMutex);
+		SDL_mutexP(_systemMutex);
 		DGControl::getInstance().terminate();
-		pthread_mutex_unlock(&_systemMutex);
-		pthread_join(tProfilerThread, NULL);
+		SDL_mutexV(_systemMutex);
 	}
 
-	pthread_join(tSystemThread, NULL);
 	killGLWindow();
 }
 
@@ -330,13 +326,13 @@ void DGSystemSDL::suspendThread(int threadID)
 	if (_areThreadsActive) {
 		switch (threadID) {
 		case DGAudioThread:
-			pthread_mutex_lock(&_audioMutex);
+			SDL_mutexP(_audioMutex);
 			break;
 		case DGTimerThread:
-			pthread_mutex_lock(&_timerMutex);
+			SDL_mutexP(_timerMutex);
 			break;
 		case DGVideoThread:
-			pthread_mutex_lock(&_videoMutex);
+			SDL_mutexP(_videoMutex);
 			break;
 		}
 	}
@@ -528,36 +524,36 @@ GLvoid DGSystemSDL::killGLWindow()
 	XCloseDisplay(GLWin.dpy);
 }
 
-void* _audioThread(void *arg)
+int _audioThread(void *arg)
 {
 	bool isRunning = true;
 	double pause = 10;
 
 	while (isRunning) {
-		pthread_mutex_lock(&_audioMutex);
+		SDL_mutexP(_audioMutex);
 		isRunning = DGAudioManager::getInstance().update();
-		pthread_mutex_unlock(&_audioMutex);
+		SDL_mutexV(_audioMutex);
 		SDL_Delay(pause);
 	}
 
 	return 0;
 }
 
-void* _profilerThread(void *arg)
+int _profilerThread(void *arg)
 {
 	bool isRunning = true;
 
 	while (isRunning) {
-		pthread_mutex_lock(&_systemMutex);
+		SDL_mutexP(_systemMutex);
 		isRunning = DGControl::getInstance().profiler();
-		pthread_mutex_unlock(&_systemMutex);
+		SDL_mutexV(_systemMutex);
 		SDL_Delay(1000);
 	}
 
 	return 0;
 }
 
-void* _systemThread(void *arg)
+int _systemThread(void *arg)
 {
 	bool isRunning = true;
 	double pause = (1.0f / DGConfig::getInstance().framerate) * 1000;
@@ -566,11 +562,11 @@ void* _systemThread(void *arg)
 
 	while (isRunning) {
 		pauseEnd = now + pause;
-		pthread_mutex_lock(&_systemMutex);
+		SDL_mutexP(_systemMutex);
 		glXMakeCurrent(GLWin.dpy, GLWin.win, GLWin.ctx);
 		isRunning = DGControl::getInstance().update();
 		glXMakeCurrent(GLWin.dpy, None, NULL);
-		pthread_mutex_unlock(&_systemMutex);
+		SDL_mutexV(_systemMutex);
 		usleep(1);
 		now = SDL_GetTicks();
 		if (pauseEnd > now)
@@ -580,30 +576,30 @@ void* _systemThread(void *arg)
 	return 0;
 }
 
-void* _timerThread(void *arg)
+int _timerThread(void *arg)
 {
 	bool isRunning = true;
 	double pause = 100;
 
 	while (isRunning) {
-		pthread_mutex_lock(&_timerMutex);
+		SDL_mutexP(_timerMutex);
 		isRunning = DGTimerManager::getInstance().update();
-		pthread_mutex_unlock(&_timerMutex);
+		SDL_mutexV(_timerMutex);
 		SDL_Delay(pause);
 	}
 
 	return 0;
 }
 
-void* _videoThread(void *arg)
+int _videoThread(void *arg)
 {
 	bool isRunning = true;
 	double pause = 10;
 
 	while (isRunning) {
-		pthread_mutex_lock(&_videoMutex);
+		SDL_mutexP(_videoMutex);
 		isRunning = DGVideoManager::getInstance().update();
-		pthread_mutex_unlock(&_videoMutex);
+		SDL_mutexV(_videoMutex);
 		SDL_Delay(pause);
 	}
 
