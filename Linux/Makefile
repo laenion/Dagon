@@ -17,7 +17,7 @@ SRC_DIR:= ../Dagon
 
 CC:= gcc
 INCLUDE:= -I $(SRC_DIR) -I $(OTHERS_DIR) -I /usr/include/freetype2 -I /usr/include/lua5.1
-LIBS:= -Wl -lXxf86vm -lGL -lGLU -lGLEW -lopenal -llua5.1 -lfreetype -logg -lvorbis -lvorbisfile -ltheora -lm
+LIBS:= -Wl -lXxf86vm -lGL -lGLU -lGLEW -lopenal -llua5.1 -lfreetype -logg -lvorbis -lvorbisfile -ltheora -lm -lSDL2
 CFLAGS:= -O2 -Wall -static $(INCLUDE)
 
 MODULES:= DGAudio DGAudioManager DGButton DGCameraManager \

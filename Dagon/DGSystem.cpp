@@ -17,6 +17,7 @@
 #include <GL/glew.h>
 #include <GL/glx.h>
 #include <pthread.h>
+#include <SDL2/SDL.h>
 #include <sys/time.h>
 #include <unistd.h>
 
@@ -78,6 +79,8 @@ DGSystemSDL::DGSystemSDL()
 
 	_isInitialized = false;
 	_isRunning = false;
+	
+	SDL_Init(0);
 }
 
 ////////////////////////////////////////////////////////////
@@ -343,6 +346,7 @@ void DGSystemSDL::terminate()
 {
 	this->destroyThreads();
 	_isRunning = false;
+	SDL_Quit();
 }
 
 void DGSystemSDL::toggleFullScreen()
@@ -527,13 +531,13 @@ GLvoid DGSystemSDL::killGLWindow()
 void* _audioThread(void *arg)
 {
 	bool isRunning = true;
-	double pause = 10000;
+	double pause = 10;
 
 	while (isRunning) {
 		pthread_mutex_lock(&_audioMutex);
 		isRunning = DGAudioManager::getInstance().update();
 		pthread_mutex_unlock(&_audioMutex);
-		usleep(pause);
+		SDL_Delay(pause);
 	}
 
 	return 0;
@@ -547,7 +551,7 @@ void* _profilerThread(void *arg)
 		pthread_mutex_lock(&_systemMutex);
 		isRunning = DGControl::getInstance().profiler();
 		pthread_mutex_unlock(&_systemMutex);
-		sleep(1);
+		SDL_Delay(1000);
 	}
 
 	return 0;
@@ -556,15 +560,21 @@ void* _profilerThread(void *arg)
 void* _systemThread(void *arg)
 {
 	bool isRunning = true;
-	double pause = (1.0f / DGConfig::getInstance().framerate) * 1000000;
+	double pause = (1.0f / DGConfig::getInstance().framerate) * 1000;
+	Uint32 pauseEnd;
+	Uint32 now = SDL_GetTicks();
 
 	while (isRunning) {
+		pauseEnd = now + pause;
 		pthread_mutex_lock(&_systemMutex);
 		glXMakeCurrent(GLWin.dpy, GLWin.win, GLWin.ctx);
 		isRunning = DGControl::getInstance().update();
 		glXMakeCurrent(GLWin.dpy, None, NULL);
 		pthread_mutex_unlock(&_systemMutex);
-		usleep(pause);
+		usleep(1);
+		now = SDL_GetTicks();
+		if (pauseEnd > now)
+			SDL_Delay(pauseEnd - now);
 	}
 
 	return 0;
@@ -573,13 +583,13 @@ void* _systemThread(void *arg)
 void* _timerThread(void *arg)
 {
 	bool isRunning = true;
-	double pause = 100000;
+	double pause = 100;
 
 	while (isRunning) {
 		pthread_mutex_lock(&_timerMutex);
 		isRunning = DGTimerManager::getInstance().update();
 		pthread_mutex_unlock(&_timerMutex);
-		usleep(pause);
+		SDL_Delay(pause);
 	}
 
 	return 0;
@@ -588,13 +598,13 @@ void* _timerThread(void *arg)
 void* _videoThread(void *arg)
 {
 	bool isRunning = true;
-	double pause = 10000;
+	double pause = 10;
 
 	while (isRunning) {
 		pthread_mutex_lock(&_videoMutex);
 		isRunning = DGVideoManager::getInstance().update();
 		pthread_mutex_unlock(&_videoMutex);
-		usleep(pause);
+		SDL_Delay(pause);
 	}
 
 	return 0;
